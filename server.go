@@ -1,9 +1,12 @@
 package main //server实现
 import (
 	"fmt"
+	"io"
 	"net"
 	"sync"
 )
+
+const BUFF_SIZE = 4096
 
 type Server struct {
 	Ip   string
@@ -30,8 +33,8 @@ func NewServer(ip string, port int) *Server {
 
 // 写一个广播方法
 func (this *Server) BroadCast(user *User, msg string) {
-	sendMsg := "[" + user.Addr + "]" + user.Name + msg
-
+	//sendMsg := "[" + user.Addr + "]" + user.Name + msg
+	sendMsg := "[" + user.Addr + "]" + msg
 	this.Message <- sendMsg
 }
 
@@ -59,7 +62,26 @@ func (this *Server) Handler(conn net.Conn) {
 	this.OnlineMap[user.Name] = user
 	this.mapLock.Unlock()
 	//，广播消息
-	this.BroadCast(user, "已上线")
+	this.BroadCast(user, "is online")
+
+	//接收客户端发送的消息
+	go func() {
+		buf := make([]byte, BUFF_SIZE)
+		for {
+			n, err := conn.Read(buf)
+			if n == 0 {
+				this.BroadCast(user, "is offline")
+				return
+			}
+
+			if err != nil && err != io.EOF {
+				fmt.Println("conn read error")
+			}
+
+			msg := string(buf[:n-1])
+			this.BroadCast(user, msg)
+		}
+	}()
 
 	select {}
 }
